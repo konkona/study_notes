@@ -1,2 +1,2 @@
-# study_notes
-study notes, include src code, language, tools etc...
+# 学习笔记备忘
+
