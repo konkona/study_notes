@@ -84,7 +84,7 @@ ADDL 进行实际的加法操作，L 这里代表 Long，4 字节的值，其将
 + 最后的 RET 伪指令告诉 Go 汇编器插入一些指令，这些指令是对应的目标平台中的调用规约所要求的，从子过程中返回时所需要的指令。
 一般情况下这样的指令会使在 0(SP) 寄存器中保存的函数返回地址被 pop 出栈，并跳回到该地址。
 
-![stack frame](../doc/images/stack_frame.png)
+![stack frame](./images/stack_frame.png)
 
 上面是main.add 即将执行 RET 指令时的栈的情况.
 
