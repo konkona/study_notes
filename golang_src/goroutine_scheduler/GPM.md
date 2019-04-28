@@ -25,3 +25,4 @@ M是machine的首字母，在当前的go版本中等于系统线程，M运行G�
 ![gpm model](./images/gpm-model.jpeg)
 
 
+如上图所示，每个P有一个local队列，local队列中就放着等待运行的G，M则不断的从拥有的P中获取G来运行。
