@@ -83,33 +83,33 @@ func newproc1(fn *funcval, argp *uint8, narg int32, callergp *g, callerpc uintpt
     
     siz := narg
     siz = (siz + 7) &^ 7  // 8字节对齐
-
-	_p_ := _g_.m.p.ptr()    // 找到当前的p，只要g在运行中，那么肯定有一个p跟它是绑定的，所以这里先找p
-	newg := gfget(_p_)      // 获取可服用的g
-	if newg == nil {
-		newg = malg(_StackMin)  // 新建, 默认最小2048byte，受系统影响，该值可能会大于2k，最终是2的整数倍
-		casgstatus(newg, _Gidle, _Gdead)   // 创建完成后设置_Gdead可以预防GC检查
-		allgadd(newg) // 添加到全局变量，也就是global队列中，这里面加了锁，因为涉及到竞争
-	}
-	
-	// 下面这几行是用来计算sp位置的
-	totalSize := 4*sys.RegSize + uintptr(siz) + sys.MinFrameSize // extra space in case of reads slightly beyond frame
-	totalSize += -totalSize & (sys.SpAlign - 1)                  // align to spAlign
-	sp := newg.stack.hi - totalSize
-	spArg := sp
-	
-	// 如果参数bytes大于0，说明有参数存在，将参数入栈，由于栈是由高到低生长的，所以参数入栈之后占用空间[sp, newg.stack.hi]
-	if narg > 0 {
-		memmove(unsafe.Pointer(spArg), unsafe.Pointer(argp), uintptr(narg))
-	}
-	
-	// 现在sp就是除去参数之后的栈顶了，用来存在函数里面的各种变量
-	
-	memclrNoHeapPointers(unsafe.Pointer(&newg.sched), unsafe.Sizeof(newg.sched))
-	newg.sched.sp = sp
-	newg.stktopsp = sp
-	newg.sched.pc = funcPC(goexit) + sys.PCQuantum // +PCQuantum so that previous instruction is in same function
-	newg.sched.g = guintptr(unsafe.Pointer(newg))
+    
+    _p_ := _g_.m.p.ptr()    // 找到当前的p，只要g在运行中，那么肯定有一个p跟它是绑定的，所以这里先找p
+    newg := gfget(_p_)      // 获取可服用的g
+    if newg == nil {
+        newg = malg(_StackMin)  // 新建, 默认最小2048byte，受系统影响，该值可能会大于2k，最终是2的整数倍
+        casgstatus(newg, _Gidle, _Gdead)   // 创建完成后设置_Gdead可以预防GC检查
+        allgadd(newg) // 添加到全局变量，也就是global队列中，这里面加了锁，因为涉及到竞争
+    }
+    
+    // 下面这几行是用来计算sp位置的
+    totalSize := 4*sys.RegSize + uintptr(siz) + sys.MinFrameSize // extra space in case of reads slightly beyond frame
+    totalSize += -totalSize & (sys.SpAlign - 1)                  // align to spAlign
+    sp := newg.stack.hi - totalSize
+    spArg := sp
+    
+    // 如果参数bytes大于0，说明有参数存在，将参数入栈，由于栈是由高到低生长的，所以参数入栈之后占用空间[sp, newg.stack.hi]
+    if narg > 0 {
+        memmove(unsafe.Pointer(spArg), unsafe.Pointer(argp), uintptr(narg))
+    }
+    
+    // 现在sp就是除去参数之后的栈顶了，用来存在函数里面的各种变量
+    
+    memclrNoHeapPointers(unsafe.Pointer(&newg.sched), unsafe.Sizeof(newg.sched))
+    newg.sched.sp = sp
+    newg.stktopsp = sp
+    newg.sched.pc = funcPC(goexit) + sys.PCQuantum // +PCQuantum so that previous instruction is in same function
+    newg.sched.g = guintptr(unsafe.Pointer(newg))
 }
 
 ```
