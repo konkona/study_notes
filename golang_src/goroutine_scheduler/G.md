@@ -80,9 +80,9 @@ systemstack函数如果是从每个os线程的g0或者是从signal
 // this. The new g is put on the queue of g's waiting to run.
 func newproc1(fn *funcval, argp *uint8, narg int32, callergp *g, callerpc uintptr) {
     _g_ := getg()   // 获取当前g， 为什么不直接用callergp呢，因为上面说了systemstack函数可能是从普通协程调用的，所以会切换stack
-
+    
     siz := narg
-	siz = (siz + 7) &^ 7  // 8字节对齐
+    siz = (siz + 7) &^ 7  // 8字节对齐
 
 	_p_ := _g_.m.p.ptr()    // 找到当前的p，只要g在运行中，那么肯定有一个p跟它是绑定的，所以这里先找p
 	newg := gfget(_p_)      // 获取可服用的g
