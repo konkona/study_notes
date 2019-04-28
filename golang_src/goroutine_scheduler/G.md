@@ -117,16 +117,16 @@ func newproc1(fn *funcval, argp *uint8, narg int32, callergp *g, callerpc uintpt
     gostartcallfn(&newg.sched, fn)  // 调用 gostartcall函数
     
     newg.gopc = callerpc
-	newg.ancestors = saveAncestors(callergp)
-	newg.startpc = fn.fn
-	
-	
-	// 初始化完成后， 设置状态为_Grunnable
-	newg.gcscanvalid = false
-	casgstatus(newg, _Gdead, _Grunnable)
-	
-	// 将⽣成的 G 对象放到 P 本地队列或全局队列。
-	runqput(_p_, newg, true)
+    newg.ancestors = saveAncestors(callergp)
+    newg.startpc = fn.fn
+    
+    
+    // 初始化完成后， 设置状态为_Grunnable
+    newg.gcscanvalid = false
+    casgstatus(newg, _Gdead, _Grunnable)
+    
+    // 将⽣成的 G 对象放到 P 本地队列或全局队列。
+    runqput(_p_, newg, true)
 }
 
 ```
