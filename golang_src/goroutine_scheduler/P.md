@@ -76,6 +76,8 @@ func runqput(_p_ *p, gp *g, next bool) {
     if runqputslow(_p_, gp, h, t) {
         return
     }
+    
+    // runqputslow返回false只有一种情况，就是队列中数据被消费了，所以retry肯定能成功
     // the queue is not full, now the put above must succeed
     goto retry
 }
