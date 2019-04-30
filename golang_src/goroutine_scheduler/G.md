@@ -4,7 +4,7 @@ func到底做了什么。
 
 ## G的基本数据结构
 
-```
+```go
 type g struct {
     stack       stack       // ⾃自定义栈。
     stackguard0 uintptr     // 栈溢出检查边界。默认  newg.stack.lo + _StackGuard
@@ -15,7 +15,7 @@ type g struct {
 
 其中stack是自己实现的一块堆栈，用来存储go协程运行时的数据，其实现如下 
 
-```
+```goregexp
 type stack struct {
 	lo uintptr      // 栈内存开始地址。
 	hi uintptr      // 结束地址。 对应的0(SP)
