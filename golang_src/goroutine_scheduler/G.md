@@ -15,7 +15,7 @@ type g struct {
 
 其中stack是自己实现的一块堆栈，用来存储go协程运行时的数据，其实现如下 
 
-```goregexp
+```go
 type stack struct {
 	lo uintptr      // 栈内存开始地址。
 	hi uintptr      // 结束地址。 对应的0(SP)
@@ -24,7 +24,7 @@ type stack struct {
 
 sched是执行现场，其实现如下
 
-```
+```go
 type gobuf struct {
 	sp   uintptr            // SP寄存器，用来存放栈顶指针  newg.stack.hi - totalSize， 其中totalSize是参数占用bytes+4个寄存器长度
 	pc   uintptr            // PC寄存器，用来存放函数指令地址
@@ -39,7 +39,7 @@ type gobuf struct {
 
 在使用go 语法糖的时候，其实是调用newproc来实现的，其实现如下
 
-```
+```go
 //go:nosplit      // 跳过stack split，禁止执行栈溢出检测
 func newproc(siz int32, fn *funcval) {  //  siz  参数bytes， fn  函数地址
 	argp := add(unsafe.Pointer(&fn), sys.PtrSize)
@@ -53,7 +53,7 @@ func newproc(siz int32, fn *funcval) {  //  siz  参数bytes， fn  函数地址
 
 先简单分析一下systemstask函数
 
-```
+```go
 // systemstack runs fn on a system stack.
 // If systemstack is called from the per-OS-thread (g0) stack, or
 // if systemstack is called from the signal handling (gsignal) stack,
@@ -75,7 +75,7 @@ systemstack函数如果是从每个os线程的g0或者是从signal
 调用的，则fn会被直接调用并返回。否则，systemstack 将切换到 g0 栈上调用 fn 然后切换回来。
 
 
-```
+```go
 // Create a new g running fn with narg bytes of arguments starting
 // at argp. callerpc is the address of the go statement that created
 // this. The new g is put on the queue of g's waiting to run.
@@ -151,7 +151,7 @@ func gostartcall(buf *gobuf, fn, ctxt unsafe.Pointer) {
 在newproc1函数创建g的时候，设置了sched的pc值，为goexit +
 sys.PCQuantum,看一下goexit的定义：
 
-```
+```go
 // The top-most function running on a goroutine
 // returns to goexit+PCQuantum.
 TEXT runtime·goexit(SB),NOSPLIT|NOFRAME,$0-0

@@ -3,7 +3,7 @@
 M可以认为是对操作系统线程的一个封装，先来看一下m的结构。
 
 ## M的基本结构
-```
+```go
 type m struct {
     // g0 , 属于m的调度协程，其stack值要比普通的(2k)要大。
     g0      *g     // goroutine with scheduling stack
@@ -42,7 +42,7 @@ type mOS struct {
 
 M的创建：
 
-```
+```go
 // Create a new m. It will start off with a call to fn, or else the scheduler.
 // fn needs to be static and not a heap allocated closure.
 // May run with m.p==nil, so write barriers are not allowed.
@@ -57,7 +57,7 @@ func newm(fn func(), _p_ *p) {
 
 通过newm创建一个m实例，其中allocm是具体创建m的方法，给m分配stack，初始化一些操作，我们看一下它的定义：
 
-```
+```go
 // Allocate a new m unassociated with any thread.
 // Can use p for allocation context if needed.
 // fn is recorded as the new m's m.mstartfn.
@@ -100,7 +100,7 @@ func allocm(_p_ *p, fn func()) *m {
 
 继续来看newm1(mp)这个函数:
 
-```
+```go
 func newm1(mp *m) {
 	execLock.rlock() // Prevent process clone.
 	newosproc(mp)
@@ -110,7 +110,7 @@ func newm1(mp *m) {
 
 这个里面啥都没做，直接调用了newosproc(mp):
 
-```
+```go
 // May run with m.p==nil, so write barriers are not allowed.
 //go:nowritebarrierrec
 func newosproc(mp *m) {
@@ -158,7 +158,7 @@ func newosproc(mp *m) {
 
 newosproc这个函数就是熟悉的系统调用啦，通过pthread_create创建一个系统线程，将mstart_stub函数作为线程入口，mp作为参数：
 
-```
+```go
 // mstart_stub is the first function executed on a new thread started by pthread_create.
 // It just does some low-level setup and then calls mstart.
 // Note: called with the C calling convention.
