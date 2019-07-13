@@ -7,9 +7,7 @@
 + IDE: IntelliJ IDEA
 
 
-### gRPC 是一个高性能、开源和通用的 RPC 框架，面向移动和 HTTP/2
-设计。我准备从server和client两个方面来分析该框架.
-
+### gRPC是一个高性能、开源和通用的RPC框架，面向移动和HTTP/2设计。
 
 先看一个官方sample，server代码如下： 
 
