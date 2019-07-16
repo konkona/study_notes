@@ -172,7 +172,7 @@ func (cc *ClientConn) handleResolvedAddrs(addrs []resolver.Address, err error) {
         cc.balancerWrapper.handleResolvedAddrs(addrs, nil)
 }
 
-// switchBalancer 如其名，关闭管来的balancer，切换为新的balancer
+// switchBalancer 如其名，关闭旧的balancer，切换为新的balancer
 func (cc *ClientConn) switchBalancer(name string) {
 	if cc.balancerWrapper != nil {
 		cc.balancerWrapper.close()
@@ -319,5 +319,8 @@ func (ac *addrConn) connect() error {
 下面开始transport的分析: 
 
 ```go
-
+func (ac *addrConn)resetTransport() ==> func (ac *addrConn) createTransport ==> func newHTTP2Client(connectCtx, ctx, target, opts, onSuccess)
 ```
+
+可以看到，transport最终是一个http2的client，http2后面分析，到目前为止，一个带有resover和balancer的ClientConn已经创建好，可以用来发送消息了。
+接下来我们开始分析数据的发送和接收.
