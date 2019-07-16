@@ -103,7 +103,7 @@ func (*passthroughBuilder) Build(target resolver.Target, cc resolver.ClientConn,
 	return r, nil
 }
 
-// r.cc 其实是ccResolverWrapper， 他集成自resolver.ClientConn
+// r.cc 其实是ccResolverWrapper， 他继承自resolver.ClientConn
 func (r *passthroughResolver) start() {
 	r.cc.NewAddress([]resolver.Address{{Addr: r.target.Endpoint}})
 }
@@ -166,9 +166,158 @@ func (ccr *ccResolverWrapper) watcher() {
 // ccResolverWrapper.watcher()函数拿到地址之后，直接传给了ClientConn，我们继续看handleResolvedAddrs函数
 func (cc *ClientConn) handleResolvedAddrs(addrs []resolver.Address, err error) {
         if newBalancerName == "" {
-            newBalancerName = PickFirstBalancerName
+            newBalancerName = PickFirstBalancerName   // 我们的balancer默认为pickfirst
         }
         cc.switchBalancer(newBalancerName)
         cc.balancerWrapper.handleResolvedAddrs(addrs, nil)
-}        
+}
+
+// switchBalancer 如其名，关闭管来的balancer，切换为新的balancer
+func (cc *ClientConn) switchBalancer(name string) {
+	if cc.balancerWrapper != nil {
+		cc.balancerWrapper.close()
+	}
+
+	// 默认的balancewr builder是pickfirst
+	builder := balancer.Get(name)
+	if builder == nil {
+		grpclog.Infof("failed to get balancer builder for: %v, using pick_first instead", name)
+		builder = newPickfirstBuilder()  // pickfirstBuilder
+	}
+	cc.preBalancerName = cc.curBalancerName
+	cc.curBalancerName = builder.Name()
+	cc.balancerWrapper = newCCBalancerWrapper(cc, builder, cc.balancerBuildOpts)	
+}
+
+func newCCBalancerWrapper(cc *ClientConn, b balancer.Builder, bopts balancer.BuildOptions) *ccBalancerWrapper {
+	ccb := &ccBalancerWrapper{
+		cc:               cc,
+		stateChangeQueue: newSCStateUpdateBuffer(),
+		resolverUpdateCh: make(chan *resolverUpdate, 1),
+		done:             make(chan struct{}),
+		subConns:         make(map[*acBalancerWrapper]struct{}),
+	}
+	go ccb.watcher()
+	ccb.balancer = b.Build(ccb, bopts) // pickfirstBalancer
+	return ccb
+}
+
+func (ccb *ccBalancerWrapper) watcher() {
+	for {
+		select {
+		case t := <-ccb.stateChangeQueue.get(): // 连接状态改变时通知
+			ccb.stateChangeQueue.load()
+			select {
+			case <-ccb.done:
+				ccb.balancer.Close()
+				return
+			default:
+			}
+			ccb.balancer.HandleSubConnStateChange(t.sc, t.state)
+		case t := <-ccb.resolverUpdateCh:   // 重点。 resolverUpdateCh 关注resolverUpdateCh channel
+			select {
+			case <-ccb.done:
+				ccb.balancer.Close()
+				return
+			default:
+			}
+			// balancer开始addrs的处理, 这里的balancer就是前面赋值的pickfirstBalancer
+			ccb.balancer.HandleResolvedAddrs(t.addrs, t.err)
+		case <-ccb.done:
+		}
+
+		select {
+		case <-ccb.done:
+			ccb.balancer.Close()
+			ccb.mu.Lock()
+			scs := ccb.subConns
+			ccb.subConns = nil
+			ccb.mu.Unlock()
+			for acbw := range scs {
+				ccb.cc.removeAddrConn(acbw.getAddrConn(), errConnDrain)
+			}
+			return
+		default:
+		}
+	}
+}
+
+目前看来balancer和resolver的方式一样,都是先watcher，然后在其他地方触发，我们继续看cc.balancerWrapper.handleResolvedAddrs(addrs, nil)定义
+func (ccb *ccBalancerWrapper) handleResolvedAddrs(addrs []resolver.Address, err error) {
+	select {
+	case <-ccb.resolverUpdateCh:
+	default:
+	}
+	ccb.resolverUpdateCh <- &resolverUpdate{
+		addrs: addrs,
+		err:   err,
+	}
+}
+```
+
+通过上面的分析，可以发现resolver和balancer之间的关系：
+ccResolverWrapper将addrs抛出，通过ClientConn将地址传递给balancer，balancer拿到addrs之后开始ccb.balancer.HandleResolvedAddrs(t.addrs,
+t.err),继续看代码：
+
+```go
+func (b *pickfirstBalancer) HandleResolvedAddrs(addrs []resolver.Address, err error) {
+	if err != nil {
+		grpclog.Infof("pickfirstBalancer: HandleResolvedAddrs called with error %v", err)
+		return
+	}
+	if b.sc == nil {
+		// 这里调用ccBalancerWrapper.NewSubConn ==> acBalancerWrapper
+		b.sc, err = b.cc.NewSubConn(addrs, balancer.NewSubConnOptions{})
+		if err != nil {
+			grpclog.Errorf("pickfirstBalancer: failed to NewSubConn: %v", err)
+			return
+		}
+		b.cc.UpdateBalancerState(connectivity.Idle, &picker{sc: b.sc})
+		b.sc.Connect()
+	} else {
+		b.sc.UpdateAddresses(addrs)
+		b.sc.Connect()
+	}
+}
+
+// 学习一下balancer和conn是怎么联系的。
+func (ccb *ccBalancerWrapper) NewSubConn(addrs []resolver.Address, opts balancer.NewSubConnOptions) (balancer.SubConn, error) {
+	ac, err := ccb.cc.newAddrConn(addrs) // 最终把addrs传递给了AddrConn。
+	acbw := &acBalancerWrapper{ac: ac}
+	ccb.subConns[acbw] = struct{}{}
+}
+
+// 在这里把ClientConn的blockingpicker更新为picker{sc: b.sc}
+func (ccb *ccBalancerWrapper) UpdateBalancerState(s connectivity.State, p balancer.Picker) {
+	ccb.cc.blockingpicker.updatePicker(p)  
+}
+
+// 终于开始了底层连接
+func (acbw *acBalancerWrapper) Connect() {
+	acbw.mu.Lock()
+	defer acbw.mu.Unlock()
+	acbw.ac.connect()
+}
+
+func (ac *addrConn) connect() error {
+	// Start a goroutine connecting to the server asynchronously.
+	go func() {
+		if err := ac.resetTransport(); err != nil {
+			grpclog.Warningf("Failed to dial %s: %v; please retry.", ac.addrs[0].Addr, err)
+			if err != errConnClosing {
+				// Keep this ac in cc.conns, to get the reason it's torn down.
+				ac.tearDown(err)
+			}
+			return
+		}
+		ac.transportMonitor()
+	}()	
+}
+```
+
+把resolver、balancer、ClientConn串起来分析一下，resolver通过监听addrs，通知给balancer，balancer创建picker并赋值给ClientConn的blockingpicker，然后开始传输层的连接和维护.
+下面开始transport的分析: 
+
+```go
+
 ```
